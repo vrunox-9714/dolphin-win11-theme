@@ -23,6 +23,6 @@ A complete, pixel-perfect transformation guide for KDE Plasma 6.6.4 to make Dolp
 
 ## Full Documentation
 
-For the complete, step-by-step technical guide including all CSS and configuration files, please view the [index.html](index.html) file included in this repository.
+For the complete, step-by-step technical guide including all CSS and configuration files, please view the [Guide]([index.html](https://vrunox-9714.github.io/dolphin-win11-theme)) file included in this repository.
 
 ---
