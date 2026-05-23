@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dolphin → Windows 11 File Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<style>
+/* ─────────────────────────────────────────
+   CSS CUSTOM PROPERTIES
+───────────────────────────────────────── */
+:root {
+  --bg:            #FFFFFF;
+  --bg-secondary:  #F5F5F5;
+  --bg-code:       #F2F2F2;
+  --text-primary:  #0A0A0A;
+  --text-secondary:#5A5A5A;
+  --text-tertiary: #A0A0A0;
+  --accent:        #1A4FFF;
+  --accent-faint:  rgba(26, 79, 255, 0.07);
+  --border:        #E6E6E6;
+  --border-strong: #C8C8C8;
+  --warn-color:    #C77B00;
+  --warn-bg:       rgba(199,123,0,0.06);
+  --success-color: #1A7A4A;
+  --success-bg:    rgba(26,122,74,0.06);
+  --tt: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+[data-theme="dark"] {
+  --bg:            #000000;
+  --bg-secondary:  #0C0C0C;
+  --bg-code:       #080808;
+  --text-primary:  #FFFFFF;
+  --text-secondary:#888888;
+  --text-tertiary: #4A4A4A;
+  --accent:        #4D7FFF;
+  --accent-faint:  rgba(77, 127, 255, 0.10);
+  --border:        #1A1A1A;
+  --border-strong: #2C2C2C;
+  --warn-color:    #FF9800;
+  --warn-bg:       rgba(255,152,0,0.07);
+  --success-color: #22C55E;
+  --success-bg:    rgba(34,197,94,0.07);
+}
+
+/* ─────────────────────────────────────────
+   RESET
+───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  overflow-x: hidden;
+}
+
+/* ─────────────────────────────────────────
+   GEOMETRIC CANVAS — BACKGROUND LAYER
+───────────────────────────────────────── */
+#geo-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  will-change: contents;
+}
+
+/* ─────────────────────────────────────────
+   LAYOUT SHELL
+───────────────────────────────────────── */
+.site-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28px 56px;
+}
+
+.logo-mark {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  transition: color 0.12s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: color 0.15s ease;
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+.theme-toggle:hover { color: var(--text-primary); }
+.theme-toggle svg { width: 16px; height: 16px; }
+.icon-sun  { display: none; }
+.icon-moon { display: block; }
+[data-theme="dark"] .icon-sun  { display: block; }
+[data-theme="dark"] .icon-moon { display: none; }
+
+main {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 0 56px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─────────────────────────────────────────
+   PROGRESS BAR
+───────────────────────────────────────── */
+.progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 1px;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(0);
+  z-index: 300;
+  will-change: transform;
+}
+
+/* ─────────────────────────────────────────
+   HERO
+───────────────────────────────────────── */
+.hero {
+  padding: 168px 0 112px;
+}
+
+.hero-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 28px;
+  display: block;
+  transition: color 0.12s ease;
+}
+
+.hero-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(52px, 9vw, 104px);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--text-primary);
+  margin-bottom: 40px;
+  transition: color 0.12s ease;
+}
+
+.title-line-wrap {
+  overflow: hidden;
+  display: block;
+  line-height: 1.02;
+}
+
+.title-line {
+  display: block;
+  will-change: transform;
+}
+
+.hero-accent {
+  color: var(--accent);
+  display: inline-block;
+  margin: 0 6px;
+  font-weight: 300;
+  transition: color 0.12s ease;
+}
+
+.hero-subtitle {
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  max-width: 420px;
+  transition: color 0.12s ease;
+  will-change: transform, opacity;
+}
+
+/* ─────────────────────────────────────────
+   PHASE SECTIONS
+───────────────────────────────────────── */
+.phase {
+  padding: 88px 0;
+  border-top: 1px solid var(--border);
+  position: relative;
+  transition: border-color 0.12s ease;
+  overflow: hidden;
+}
+
+.phase-bg-num {
+  position: absolute;
+  right: -12px;
+  top: 48px;
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(140px, 18vw, 200px);
+  font-weight: 800;
+  color: var(--text-primary);
+  opacity: 0.028;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: -0.06em;
+  will-change: transform;
+  transition: color 0.12s ease;
+}
+
+.phase-meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+  will-change: transform, opacity;
+}
+
+.phase-tag-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent);
+  transition: color 0.12s ease;
+}
+
+.phase-tag-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  transition: color 0.12s ease;
+}
+
+.phase-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(26px, 4vw, 42px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+  margin-bottom: 52px;
+  transition: color 0.12s ease;
+  will-change: transform, opacity;
+}
+
+/* ─────────────────────────────────────────
+   ACCORDION STEPS
+───────────────────────────────────────── */
+.steps { display: flex; flex-direction: column; }
+
+.step {
+  border-top: 1px solid var(--border);
+  transition: border-color 0.12s ease;
+  will-change: transform, opacity;
+}
+.step:last-child { border-bottom: 1px solid var(--border); }
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.step-head:hover .step-title { color: var(--accent); }
+
+.step-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-faint);
+  color: var(--accent);
+  flex-shrink: 0;
+  transition: background 0.2s ease, color 0.2s ease;
+  letter-spacing: 0;
+}
+.step.open .step-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.step-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  line-height: 1.35;
+  transition: color 0.15s ease;
+}
+
+.step-chevron {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s ease;
+  will-change: transform;
+}
+.step.open .step-chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.step-body {
+  overflow: hidden;
+  height: 0;
+  padding-left: 50px;
+}
+
+.step-body-inner { padding: 4px 0 36px; }
+
+/* ─────────────────────────────────────────
+   CONTENT TYPOGRAPHY
+───────────────────────────────────────── */
+.step-body p {
+  font-size: 14.5px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  line-height: 1.85;
+  margin-bottom: 14px;
+  transition: color 0.12s ease;
+}
+.step-body p:last-child { margin-bottom: 0; }
+
+.step-body ol,
+.step-body ul {
+  margin: 14px 0;
+  padding-left: 20px;
+}
+
+.step-body li {
+  font-size: 14.5px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  line-height: 1.85;
+  margin-bottom: 7px;
+  transition: color 0.12s ease;
+}
+
+.step-body strong {
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: color 0.12s ease;
+}
+.step-body em { font-style: italic; }
+
+.step-body kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: var(--text-primary);
+  transition: var(--tt);
+}
+
+.step-body code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  color: var(--accent);
+  transition: var(--tt);
+}
+
+/* ─────────────────────────────────────────
+   CODE BLOCKS
+───────────────────────────────────────── */
+.code-block {
+  margin: 20px 0;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  overflow: hidden;
+  transition: var(--tt);
+}
+
+.code-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.12s ease;
+}
+
+.code-label-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  transition: color 0.12s ease;
+}
+
+.copy-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 8px;
+  transition: color 0.15s ease;
+}
+.copy-btn:hover { color: var(--accent); }
+
+.code-block pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 18px;
+  overflow-x: auto;
+  line-height: 1.75;
+  white-space: pre;
+  transition: color 0.12s ease;
+}
+
+/* ─────────────────────────────────────────
+   NOTES
+───────────────────────────────────────── */
+.note {
+  margin: 18px 0;
+  padding: 14px 18px;
+  font-size: 13.5px;
+  font-weight: 300;
+  line-height: 1.75;
+  border-left: 2px solid;
+  transition: var(--tt);
+}
+.note-info    { background: var(--accent-faint); border-color: var(--accent); color: var(--text-secondary); }
+.note-warn    { background: var(--warn-bg);       border-color: var(--warn-color); color: var(--text-secondary); }
+.note-success { background: var(--success-bg);    border-color: var(--success-color); color: var(--text-secondary); }
+
+/* ─────────────────────────────────────────
+   TABLES
+───────────────────────────────────────── */
+.step-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 13px;
+}
+.step-body th {
+  text-align: left;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-strong);
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.step-body td {
+  padding: 11px 14px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  font-weight: 300;
+  line-height: 1.55;
+  vertical-align: top;
+  transition: var(--tt);
+}
+.step-body td:first-child { color: var(--text-primary); font-weight: 500; transition: color 0.12s ease; }
+.step-body tr:last-child td { border-bottom: none; }
+
+/* ─────────────────────────────────────────
+   FOOTER
+───────────────────────────────────────── */
+footer {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 56px 56px 88px;
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+  transition: border-color 0.12s ease;
+}
+.footer-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ─────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────── */
+@media (max-width: 768px) {
+  main { padding: 0 28px; }
+  footer { padding: 40px 28px 64px; }
+  .site-header { padding: 22px 28px; }
+  .hero { padding: 128px 0 80px; }
+  .phase { padding: 64px 0; }
+  .phase-bg-num { font-size: 110px; opacity: 0.022; }
+  .step-body { padding-left: 30px; }
+}
+
+/* ─────────────────────────────────────────
+   SCROLLBAR
+───────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Geometric Background Canvas -->
+<canvas id="geo-canvas"></canvas>
+
+<!-- Reading Progress -->
+<div class="progress-bar" id="progress-bar"></div>
+
+<!-- Fixed Header -->
+<header class="site-header">
+  <span class="logo-mark">KDE / Win11 Guide</span>
+  <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+    <!-- Moon icon (shown in light mode) -->
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+    <!-- Sun icon (shown in dark mode) -->
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4.5"/>
+      <line x1="12" y1="1.5" x2="12" y2="3.5"/>
+      <line x1="12" y1="20.5" x2="12" y2="22.5"/>
+      <line x1="4.1" y1="4.1" x2="5.5" y2="5.5"/>
+      <line x1="18.5" y1="18.5" x2="19.9" y2="19.9"/>
+      <line x1="1.5" y1="12" x2="3.5" y2="12"/>
+      <line x1="20.5" y1="12" x2="22.5" y2="12"/>
+      <line x1="4.1" y1="19.9" x2="5.5" y2="18.5"/>
+      <line x1="18.5" y1="5.5" x2="19.9" y2="4.1"/>
+    </svg>
+  </button>
+</header>
+
+<main>
+
+  <!-- ── HERO ─────────────────────────────── -->
+  <section class="hero">
+    <span class="hero-eyebrow">KDE Plasma 6.6.4 — Production Guide</span>
+    <h1 class="hero-title">
+      <span class="title-line-wrap"><span class="title-line">Dolphin</span></span>
+      <span class="title-line-wrap"><span class="title-line"><span class="hero-accent">→</span>&thinsp;Windows&thinsp;11</span></span>
+      <span class="title-line-wrap"><span class="title-line">File Explorer</span></span>
+    </h1>
+    <p class="hero-subtitle">Complete transformation guide for KDE Plasma 6.6.4 — every step with full config &amp; code.</p>
+  </section>
+
+  <!-- ── PHASE 1 ───────────────────────────── -->
+  <section class="phase">
+    <span class="phase-bg-num" aria-hidden="true">01</span>
+    <div class="phase-meta">
+      <span class="phase-tag-num">Phase 01</span>
+      <span class="phase-tag-label">Layout</span>
+    </div>
+    <h2 class="phase-title">Structural layout realignment<br>&amp; toolbar sequencing</h2>
+
+    <div class="steps">
+      <article class="step" id="s1">
+        <div class="step-head" onclick="toggleStep('s1')" role="button" aria-expanded="false" aria-controls="body-s1">
+          <div class="step-num">1</div>
+          <div class="step-title">Nest the address bar inside each tab</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s1">
+          <div class="step-body-inner">
+            <p>By default Dolphin renders a single global location bar above all tabs, which looks disconnected from individual tab states. Removing it forces Dolphin to render a dedicated, local address bar inside each tab header — matching Windows 11's per-tab address behavior.</p>
+            <ol>
+              <li>Right-click the Dolphin toolbar → <strong>Configure Toolbars…</strong></li>
+              <li>In the right-hand "Current Actions" panel, find <code>Location Bar</code> and click the left arrow to remove it.</li>
+              <li>Click <strong>Apply</strong>. Dolphin automatically activates per-tab address bars as a fallback.</li>
+              <li>Go to <strong>Configure Dolphin… → Startup → New windows</strong> and check <em>Make location bar editable</em>.</li>
+            </ol>
+            <div class="note note-info">This single change is the foundation of all tab-level layout work. Without it, the address bar will remain globally shared and won't reflect individual tab navigation state.</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step" id="s2">
+        <div class="step-head" onclick="toggleStep('s2')" role="button" aria-expanded="false" aria-controls="body-s2">
+          <div class="step-num">2</div>
+          <div class="step-title">Build the primary navigation toolbar row</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s2">
+          <div class="step-body-inner">
+            <p>Open <strong>Configure Toolbars…</strong> and arrange the top row with these exact actions and display modes, matching the Windows 11 address bar visual sequence:</p>
+            <table>
+              <thead>
+                <tr><th>Visual Component</th><th>Dolphin Action Name</th><th>Display Mode</th><th>Separator After?</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Back arrow</td><td><code>go_back</code></td><td>Icon Only</td><td>—</td></tr>
+                <tr><td>Forward arrow</td><td><code>go_forward</code></td><td>Icon Only</td><td>—</td></tr>
+                <tr><td>Up arrow</td><td><code>go_up</code></td><td>Icon Only</td><td>—</td></tr>
+                <tr><td>Reload</td><td><code>reload</code></td><td>Icon Only</td><td>—</td></tr>
+                <tr><td>Home</td><td><code>go_home</code></td><td>Icon Only</td><td>Insert Spacer</td></tr>
+                <tr><td>Address bar</td><td>(tab-local fallback)</td><td>Text Path</td><td>Insert Expanding Spacer</td></tr>
+                <tr><td>Search</td><td><code>search</code></td><td>Icon &amp; Text</td><td>—</td></tr>
+              </tbody>
+            </table>
+            <div class="note note-info">Use a fixed <strong>Spacer</strong> between Home and the address bar to create visual grouping. Use an <strong>Expanding Spacer</strong> after the address bar so the search field is pushed to the far right, exactly like Windows 11.</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step" id="s3">
+        <div class="step-head" onclick="toggleStep('s3')" role="button" aria-expanded="false" aria-controls="body-s3">
+          <div class="step-num">3</div>
+          <div class="step-title">Build the secondary command bar (file operations)</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s3">
+          <div class="step-body-inner">
+            <p>In <strong>Configure Toolbars…</strong>, populate a second toolbar row with these actions in order. This replicates the flat context-sensitive command strip beneath the address bar in Windows 11:</p>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">Toolbar action sequence</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>[ + New  (new_dir) ]  [ Cut (edit_cut) ]  [ Copy (edit_copy) ]
+[ Paste (edit_paste) ]  [ View (view_menu) ]</pre>
+            </div>
+            <p>All actions should be set to <strong>Icon Only</strong> with no text labels, to match the minimal Windows 11 command bar aesthetic.</p>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── PHASE 2 ───────────────────────────── -->
+  <section class="phase">
+    <span class="phase-bg-num" aria-hidden="true">02</span>
+    <div class="phase-meta">
+      <span class="phase-tag-num">Phase 02</span>
+      <span class="phase-tag-label">Tab Bar</span>
+    </div>
+    <h2 class="phase-title">Chrome-style tab bar<br>implementation</h2>
+
+    <div class="steps">
+      <article class="step" id="s4">
+        <div class="step-head" onclick="toggleStep('s4')" role="button" aria-expanded="false" aria-controls="body-s4">
+          <div class="step-num">4</div>
+          <div class="step-title">Intercept the native titlebar via KWin rule</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s4">
+          <div class="step-body-inner">
+            <p>KDE Plasma uses server-side decorations (SSD) by default, which blocks custom tab bars from rendering inside the window title area. You must force-remove the titlebar for Dolphin specifically via a KWin application rule.</p>
+            <ol>
+              <li>Go to <strong>System Settings → Window Management → Window Rules</strong></li>
+              <li>Click <strong>Add New…</strong></li>
+              <li>Set <em>Window class (application)</em> to <code>org.kde.dolphin</code>, match: <em>Exact Match</em></li>
+              <li>Under <strong>Appearance &amp; Fixes</strong>, add property: <em>No titlebar and frame</em> → set to <strong>Force → Yes</strong></li>
+              <li>Click Apply and restart Dolphin</li>
+            </ol>
+            <div class="note note-warn">You will lose the standard Minimize/Maximize/Close buttons. To restore them, install the <strong>Klassy</strong> window decoration suite and configure a global window controls panel widget, or add them to the system top bar.</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step" id="s5">
+        <div class="step-head" onclick="toggleStep('s5')" role="button" aria-expanded="false" aria-controls="body-s5">
+          <div class="step-num">5</div>
+          <div class="step-title">Style QTabBar for trapezoidal Chrome-style tabs</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s5">
+          <div class="step-body-inner">
+            <p>With the titlebar gone, Dolphin's internal tab widget can now occupy the top of the window. Apply the following QSS to <code>~/.config/dolphin.qss</code> to transform flat square tabs into angled, sloped Chrome/Fluent-style tabs:</p>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">QTabBar styles — ~/.config/dolphin.qss (tab section)</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>/* Base tab bar container — matches Windows light theme background */
+QTabBar {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #F3F3F3, stop:1 #EAEAEA
+    );
+    border-bottom: 1px solid #D5D5D5;
+}
+
+/* Inactive tabs — sloped trapezoidal shape with top-radius and overlap */
+QTabBar::tab:!selected {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #E5E5E5, stop:1 #DCDCDC
+    );
+    color: #454545;
+    border: 1px solid #C0C0C0;
+    border-bottom-color: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    padding: 6px 20px;
+    margin-right: -4px;
+    margin-top: 4px;
+}
+
+/* Active tab — white Fluent surface with blue accent underline */
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    color: #1A1A1A;
+    border: 1px solid #D5D5D5;
+    border-bottom: 2px solid #005A9E;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    padding: 8px 24px;
+    margin-top: 0px;
+}
+
+/* Hover transition on inactive tabs */
+QTabBar::tab:!selected:hover {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #EDEDED, stop:1 #E2E2E2
+    );
+    border-color: #B5B5B5;
+}</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step" id="s6">
+        <div class="step-head" onclick="toggleStep('s6')" role="button" aria-expanded="false" aria-controls="body-s6">
+          <div class="step-num">6</div>
+          <div class="step-title">Add an inline "+" new-tab button</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s6">
+          <div class="step-body-inner">
+            <p>Dolphin's <code>QTabBar</code> does not natively render an inline "+" button at the end of the tab strip. Implement one by binding a toolbar button to the <code>new_tab</code> action and positioning it adjacent to the tab bar via QSS.</p>
+            <ol>
+              <li>In <strong>Configure Toolbars…</strong>, add a button bound to action <code>new_tab</code> (also triggered by <kbd>Ctrl+T</kbd>).</li>
+              <li>Set it to Icon Only, positioned at the far right of the tab bar row.</li>
+              <li>Add the following to your <code>dolphin.qss</code>:</li>
+            </ol>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">New tab button QSS — append to ~/.config/dolphin.qss</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>/* Transparent "+" button sitting beside the tab strip */
+QToolButton#new_tab_action {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+}
+
+QToolButton#new_tab_action:hover {
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── PHASE 3 ───────────────────────────── -->
+  <section class="phase">
+    <span class="phase-bg-num" aria-hidden="true">03</span>
+    <div class="phase-meta">
+      <span class="phase-tag-num">Phase 03</span>
+      <span class="phase-tag-label">Theme</span>
+    </div>
+    <h2 class="phase-title">Fluent theme &amp; iconography<br>integration</h2>
+
+    <div class="steps">
+      <article class="step" id="s7">
+        <div class="step-head" onclick="toggleStep('s7')" role="button" aria-expanded="false" aria-controls="body-s7">
+          <div class="step-num">7</div>
+          <div class="step-title">Disable alternating row colors via kdeglobals</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s7">
+          <div class="step-body-inner">
+            <p>Dolphin's default view uses alternating row background colors. Windows 11 uses a flat solid-white file list. Disable the striping by making both background values identical in the KDE color config.</p>
+            <ol>
+              <li>Open <code>~/.config/kdeglobals</code> in a text editor.</li>
+              <li>Find (or create) the <code>[Colors:View]</code> block.</li>
+              <li>Set both values as shown:</li>
+            </ol>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">~/.config/kdeglobals — [Colors:View] block</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>[Colors:View]
+BackgroundNormal=255,255,255
+BackgroundAlternate=255,255,255</pre>
+            </div>
+            <div class="note note-warn">If you use the <strong>Kvantum theme engine</strong>, it overrides kdeglobals. You must also open <code>~/.config/Kvantum/&lt;ThemeName&gt;/&lt;ThemeName&gt;.kvconfig</code> and verify that <code>base.color</code> and <code>alt.base.color</code> are set to the same value.</div>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">~/.config/Kvantum/&lt;Theme&gt;/&lt;Theme&gt;.kvconfig — relevant keys</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>base.color=#FFFFFF
+alt.base.color=#FFFFFF</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step" id="s8">
+        <div class="step-head" onclick="toggleStep('s8')" role="button" aria-expanded="false" aria-controls="body-s8">
+          <div class="step-num">8</div>
+          <div class="step-title">Install Win11 icon theme &amp; Willow action overlays</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s8">
+          <div class="step-body-inner">
+            <p>Replace Dolphin's default icon set with Windows 11 navigation glyphs, folder icons, and action buttons:</p>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">Terminal — install Win11 icon pack</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre># Download Win11 icon theme by yeyushengfan258
+git clone https://github.com/yeyushengfan258/Win11-icon-theme.git
+cp -r Win11-icon-theme/Win11 ~/.local/share/icons/Win11/
+
+# Overlay Willow theme action arrows
+git clone https://github.com/doncsugar/willow-theme.git
+cp willow-theme/willow-icons/actions/22/* \
+   ~/.local/share/icons/Win11/actions/22/
+
+# Refresh icon cache
+gtk-update-icon-cache ~/.local/share/icons/Win11/</pre>
+            </div>
+            <ol>
+              <li>Open <strong>System Settings → Colors &amp; Themes → Icons</strong></li>
+              <li>Select <strong>Win11</strong> from the list and click <strong>Apply</strong></li>
+            </ol>
+            <div class="note note-success">The Willow overlays specifically replace the navigation arrows (back, forward, up) with Windows-accurate glyphs that the base Win11 pack does not include.</div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── PHASE 4 ───────────────────────────── -->
+  <section class="phase">
+    <span class="phase-bg-num" aria-hidden="true">04</span>
+    <div class="phase-meta">
+      <span class="phase-tag-num">Phase 04</span>
+      <span class="phase-tag-label">QSS Stylesheet</span>
+    </div>
+    <h2 class="phase-title">Complete Dolphin<br>QSS stylesheet</h2>
+
+    <div class="steps">
+      <article class="step" id="s9">
+        <div class="step-head" onclick="toggleStep('s9')" role="button" aria-expanded="false" aria-controls="body-s9">
+          <div class="step-num">9</div>
+          <div class="step-title">Write the full ~/.config/dolphin.qss file</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s9">
+          <div class="step-body-inner">
+            <p>This is the complete stylesheet. It unifies every UI surface — the main container, split view borders, scrollbars, context menus, and the sidebar tree — to match the Fluent design language. Write this entire block to <code>~/.config/dolphin.qss</code>:</p>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">~/.config/dolphin.qss — complete stylesheet</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>/* ── Main window: solid white Fluent base ── */
+QWidget {
+    color: #1A1A1A;
+    background-color: #FFFFFF;
+}
+
+/* ── Remove borders between split views and panel zones ── */
+DolphinViewContainer > DolphinView > QAbstractScrollArea {
+    background-color: transparent;
+    border: none;
+}
+
+/* ── Eliminate all internal frame lines for flat aesthetic ── */
+QFrame {
+    border: none;
+}
+
+/* ── Scrollbars: thin, rounded Fluent style ── */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #878787;
+    min-height: 20px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #646464;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    background: none;
+    height: 0px;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0px;
+}
+QScrollBar::handle:horizontal {
+    background: #878787;
+    min-width: 20px;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #646464;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    background: none;
+    width: 0px;
+}
+
+/* ── Context menus: Fluent rounded overlay style ── */
+QMenu {
+    background-color: #FFFFFF;
+    border: 1px solid #D5D5D5;
+    border-radius: 8px;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 24px;
+    border-radius: 4px;
+}
+QMenu::item:selected {
+    background-color: #F3F3F3;
+    color: #1A1A1A;
+}
+QMenu::separator {
+    height: 1px;
+    background: #E5E5E5;
+    margin: 4px 8px;
+}
+
+/* ── Sidebar: #F9F9F9 background ── */
+QTreeView {
+    background-color: #F9F9F9;
+    border-right: 1px solid #E5E5E5;
+    show-decoration-selected: 1;
+}
+QTreeView::item {
+    height: 32px;
+    border-radius: 4px;
+}
+QTreeView::item:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+QTreeView::item:selected {
+    background-color: rgba(0, 0, 0, 0.08);
+    color: #000000;
+}
+
+/* ── Tab bar ── */
+QTabBar {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #F3F3F3, stop:1 #EAEAEA
+    );
+    border-bottom: 1px solid #D5D5D5;
+}
+QTabBar::tab:!selected {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #E5E5E5, stop:1 #DCDCDC
+    );
+    color: #454545;
+    border: 1px solid #C0C0C0;
+    border-bottom-color: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    padding: 6px 20px;
+    margin-right: -4px;
+    margin-top: 4px;
+}
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    color: #1A1A1A;
+    border: 1px solid #D5D5D5;
+    border-bottom: 2px solid #005A9E;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    padding: 8px 24px;
+    margin-top: 0px;
+}
+QTabBar::tab:!selected:hover {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #EDEDED, stop:1 #E2E2E2
+    );
+    border-color: #B5B5B5;
+}
+
+/* ── New-tab "+" button ── */
+QToolButton#new_tab_action {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+}
+QToolButton#new_tab_action:hover {
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step" id="s10">
+        <div class="step-head" onclick="toggleStep('s10')" role="button" aria-expanded="false" aria-controls="body-s10">
+          <div class="step-num">10</div>
+          <div class="step-title">Load the stylesheet persistently via the .desktop launcher</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s10">
+          <div class="step-body-inner">
+            <p>The stylesheet must be passed as a flag every time Dolphin launches. Edit the desktop entry so all launch paths (app drawer, taskbar, <kbd>Super</kbd> menu) automatically apply it:</p>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">Terminal — copy and patch the desktop entry</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre># Copy system entry to user-local override location
+cp /usr/share/applications/org.kde.dolphin.desktop \
+   ~/.local/share/applications/org.kde.dolphin.desktop
+
+# Edit the Exec line
+nano ~/.local/share/applications/org.kde.dolphin.desktop</pre>
+            </div>
+            <p>Find the line starting with <code>Exec=</code> and update it to:</p>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">~/.local/share/applications/org.kde.dolphin.desktop — Exec line</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>Exec=dolphin --stylesheet ~/.config/dolphin.qss %u</pre>
+            </div>
+            <div class="note note-info">Keep <code>%u</code> at the end — it passes file/folder URI arguments so Dolphin still opens correctly when you click a folder in another app. Omitting it breaks file association launches.</div>
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-text">Terminal — refresh desktop database</span><button class="copy-btn" onclick="cp(this)">Copy</button></div>
+              <pre>update-desktop-database ~/.local/share/applications/</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── FINAL ─────────────────────────────── -->
+  <section class="phase">
+    <div class="phase-meta">
+      <span class="phase-tag-num">Final</span>
+      <span class="phase-tag-label">Verification</span>
+    </div>
+    <h2 class="phase-title">Verification<br>checklist</h2>
+
+    <div class="steps">
+      <article class="step" id="s11">
+        <div class="step-head" onclick="toggleStep('s11')" role="button" aria-expanded="false" aria-controls="body-s11">
+          <div class="step-num">✓</div>
+          <div class="step-title">Confirm all changes are applied correctly</div>
+          <svg class="step-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="step-body" id="body-s11">
+          <div class="step-body-inner">
+            <p>After a full Dolphin restart, verify each of the following:</p>
+            <ul>
+              <li>Address bar appears <em>inside</em> each tab header — not globally above the tab strip</li>
+              <li>Top row shows: Back / Forward / Up / Reload / Home — then address — then Search</li>
+              <li>Second toolbar row shows: New / Cut / Copy / Paste / View</li>
+              <li>Window has no OS titlebar; tabs render at the very top of the window frame</li>
+              <li>Active tab is white and raised; inactive tabs are gray and recessed with overlap</li>
+              <li>File list background is solid white — no alternating row colors</li>
+              <li>Sidebar is <code>#F9F9F9</code> with a right border separating it from the file view</li>
+              <li>Scrollbars are 8px thin with rounded handles</li>
+              <li>Context menus are white with rounded corners and no harsh borders</li>
+              <li>Icons render Windows 11 glyphs for folders, drives, and toolbar actions</li>
+            </ul>
+            <div class="note note-warn">If the stylesheet doesn't appear to be loading, run <code>dolphin --stylesheet ~/.config/dolphin.qss</code> directly in a terminal to check for QSS parse errors in the output.</div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p class="footer-text">KDE Plasma 6.6.4 — Complete Configuration Reference</p>
+</footer>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════ -->
+<script>
+/* ── Theme ──────────────────────────────── */
+const html = document.documentElement;
+const themeBtn = document.getElementById('theme-toggle');
+
+// Restore saved preference
+const saved = localStorage.getItem('km-theme') || 'light';
+html.setAttribute('data-theme', saved);
+
+themeBtn.addEventListener('click', () => {
+  const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('km-theme', next);
+});
+
+/* ── GSAP Setup ─────────────────────────── */
+gsap.registerPlugin(ScrollTrigger);
+
+/* ── Hero Entrance — "stretch" reveal ───── */
+window.addEventListener('DOMContentLoaded', () => {
+  const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
+
+  tl.from('.hero-eyebrow', {
+    opacity: 0, yPercent: 120, duration: 0.75, delay: 0.1
+  });
+
+  tl.from('.title-line', {
+    yPercent: 108,
+    duration: 0.95,
+    stagger: 0.11,
+    ease: 'expo.out'
+  }, '-=0.5');
+
+  tl.from('.hero-subtitle', {
+    opacity: 0, y: 18, duration: 0.7, ease: 'power3.out'
+  }, '-=0.35');
+});
+
+/* ── Scroll-triggered phase animations ──── */
+document.querySelectorAll('.phase').forEach(phase => {
+  const bgNum    = phase.querySelector('.phase-bg-num');
+  const meta     = phase.querySelector('.phase-meta');
+  const title    = phase.querySelector('.phase-title');
+  const steps    = phase.querySelectorAll('.step');
+
+  const tl = gsap.timeline({
+    scrollTrigger: {
+      trigger: phase,
+      start: 'top 82%',
+      once: true
+    }
+  });
+
+  if (bgNum) {
+    tl.from(bgNum, { x: 80, opacity: 0, duration: 1.4, ease: 'expo.out' });
+  }
+
+  tl.from(meta, {
+    opacity: 0, x: -28, duration: 0.65, ease: 'power4.out'
+  }, bgNum ? '-=1.1' : 0);
+
+  tl.from(title, {
+    opacity: 0, y: 30, duration: 0.75, ease: 'power4.out'
+  }, '-=0.48');
+
+  tl.from(steps, {
+    opacity: 0, y: 22, duration: 0.5, stagger: 0.07, ease: 'power3.out'
+  }, '-=0.4');
+});
+
+/* ── Accordion ──────────────────────────── */
+function toggleStep(id) {
+  const step = document.getElementById(id);
+  const body = document.getElementById('body-' + id);
+  const head = step.querySelector('.step-head');
+  const isOpen = step.classList.contains('open');
+
+  if (isOpen) {
+    step.classList.remove('open');
+    head.setAttribute('aria-expanded', 'false');
+
+    // FIX: Added overflow: 'hidden' to clip content instantly as height collapses
+    gsap.to(body, {
+      height: 0,
+      overflow: 'hidden',
+      duration: 0.38,
+      ease: 'power3.inOut',
+      overwrite: true
+    });
+
+  } else {
+    step.classList.add('open');
+    head.setAttribute('aria-expanded', 'true');
+
+    // Measure natural height
+    gsap.set(body, { height: 'auto', overflow: 'hidden' });
+    const fullH = body.offsetHeight;
+    gsap.fromTo(body,
+      { height: 0, overflow: 'hidden' },
+      { height: fullH, duration: 0.48, ease: 'expo.out', overwrite: true,
+        onComplete: () => gsap.set(body, { overflow: 'visible', height: 'auto' }) }
+    );
+
+    // Animate inner content
+    gsap.from(body.querySelector('.step-body-inner'), {
+      opacity: 0, y: -10, duration: 0.38, delay: 0.1, ease: 'power3.out'
+    });
+  }
+}
+
+/* ── Copy to Clipboard ──────────────────── */
+function cp(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  navigator.clipboard.writeText(pre.textContent.trim()).then(() => {
+    btn.textContent = 'Copied';
+    gsap.fromTo(btn,
+      { color: '#22C55E' },
+      { color: 'var(--text-tertiary)', duration: 2, delay: 0.5, ease: 'power2.out' }
+    );
+    setTimeout(() => btn.textContent = 'Copy', 1900);
+  }).catch(() => {
+    btn.textContent = 'Failed';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+/* ── Progress Bar ───────────────────────── */
+const bar = document.getElementById('progress-bar');
+window.addEventListener('scroll', () => {
+  const pct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+  gsap.set(bar, { scaleX: Math.min(pct, 1) });
+}, { passive: true });
+
+/* ── Geometric Canvas ───────────────────── */
+(function () {
+  const canvas = document.getElementById('geo-canvas');
+  const ctx    = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize, { passive: true });
+
+  // GeoElement — slow, mathematical, deliberate
+  class GeoElement {
+    constructor(type) {
+      this.type = type;
+      this.init(true);
+    }
+
+    init(scatter) {
+      const W = canvas.width;
+      const H = canvas.height;
+
+      if (scatter) {
+        this.x = Math.random() * W;
+        this.y = Math.random() * H;
+      } else {
+        // Re-enter from a random edge
+        const edge = Math.floor(Math.random() * 4);
+        if      (edge === 0) { this.x = -120; this.y = Math.random() * H; }
+        else if (edge === 1) { this.x = W + 120; this.y = Math.random() * H; }
+        else if (edge === 2) { this.x = Math.random() * W; this.y = -120; }
+        else                 { this.x = Math.random() * W; this.y = H + 120; }
+      }
+
+      // Ultra-slow, constant-velocity drift
+      const speed = 0.18 + Math.random() * 0.28;
+      const angle = Math.random() * Math.PI * 2;
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed;
+
+      this.rot   = Math.random() * Math.PI * 2;
+      this.rotV  = (Math.random() - 0.5) * 0.0008; // near-zero rotation rate
+
+      if (this.type === 'dot') {
+        this.r = 1 + Math.random() * 1.2;
+      } else if (this.type === 'line') {
+        this.len      = 48 + Math.random() * 80;
+        this.lineAngle = Math.random() * Math.PI;
+      } else if (this.type === 'square') {
+        this.size = 20 + Math.random() * 36;
+      }
+    }
+
+    update() {
+      this.x   += this.vx;
+      this.y   += this.vy;
+      this.rot += this.rotV;
+
+      const pad = 160;
+      const W = canvas.width;
+      const H = canvas.height;
+
+      if (this.x < -pad || this.x > W + pad || this.y < -pad || this.y > H + pad) {
+        this.init(false);
+      }
+    }
+
+    draw() {
+      const dark  = html.getAttribute('data-theme') === 'dark';
+      const alpha = dark ? 0.12 : 0.065;
+      const ch    = dark ? '255,255,255' : '0,0,0';
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = `rgb(${ch})`;
+      ctx.fillStyle   = `rgb(${ch})`;
+      ctx.lineWidth   = 0.75;
+
+      if (this.type === 'dot') {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (this.type === 'line') {
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.lineAngle + this.rot * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(-this.len / 2, 0);
+        ctx.lineTo( this.len / 2, 0);
+        ctx.stroke();
+
+      } else if (this.type === 'square') {
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rot);
+        const h = this.size / 2;
+        ctx.strokeRect(-h, -h, this.size, this.size);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  // 7 elements — 3 dots · 2 lines · 2 squares
+  const elements = [
+    new GeoElement('dot'),
+    new GeoElement('dot'),
+    new GeoElement('dot'),
+    new GeoElement('line'),
+    new GeoElement('line'),
+    new GeoElement('square'),
+    new GeoElement('square'),
+  ];
+
+  (function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    elements.forEach(el => { el.update(); el.draw(); });
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>
